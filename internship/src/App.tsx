@@ -635,23 +635,18 @@
 
 // export default App;
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect } from "react";
 import { Provider } from "react-redux";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import { configureStore, createSlice } from "@reduxjs/toolkit";
 import { useDispatch, useSelector } from "react-redux";
+import adminAuthReducer from "./store/adminAuthSlice";
+import AdminRouter from "./components/admin/AdminRouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   CheckCircle,
@@ -659,7 +654,6 @@ import {
   Loader2,
   MapPin,
   Calendar,
-  DollarSign,
   Clock,
   Download,
   ArrowLeft,
@@ -831,10 +825,11 @@ const {
 const store = configureStore({
   reducer: {
     application: applicationSlice.reducer,
+    adminAuth: adminAuthReducer,
   },
 });
 
-type RootState = ReturnType<typeof store.getState>;
+export type RootState = ReturnType<typeof store.getState>;
 
 // API configuration
 const API_BASE_URL = "http://localhost:3011/api";
@@ -1784,6 +1779,17 @@ const InternshipPortal: React.FC = () => {
 
 // Root App with Provider
 const App: React.FC = () => {
+  // Check if we're on an admin route
+  const isAdminRoute = window.location.pathname.startsWith('/admin') || window.location.hash.startsWith('#admin');
+  
+  if (isAdminRoute) {
+    return (
+      <Provider store={store}>
+        <AdminRouter />
+      </Provider>
+    );
+  }
+  
   return (
     <Provider store={store}>
       <InternshipPortal />
