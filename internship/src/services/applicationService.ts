@@ -1,4 +1,4 @@
-import { apiClient } from '../api/client';
+import { apiClient } from '../api';
 import type { Application, InternshipApplication } from '../types';
 import type { PaginatedResponse } from '../api/client';
 

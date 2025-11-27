@@ -1,4 +1,4 @@
-import { apiClient } from '../api/client';
+import { apiClient } from '../api';
 import type { Admin } from '../types';
 
 export interface LoginCredentials {

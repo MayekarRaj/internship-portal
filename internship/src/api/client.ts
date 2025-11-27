@@ -18,16 +18,43 @@ export interface PaginatedResponse<T> {
   };
 }
 
-// API Client class
+// Request interceptor type
+export type RequestInterceptor = (config: RequestInit) => RequestInit | Promise<RequestInit>;
+
+// Response interceptor type
+export type ResponseInterceptor = <T>(response: Response, data: ApiResponse<T>) => ApiResponse<T> | Promise<ApiResponse<T>>;
+
+// API Client class - Singleton pattern
 class ApiClient {
+  private static instance: ApiClient;
   private baseURL: string;
   private defaultHeaders: HeadersInit;
+  private requestInterceptors: RequestInterceptor[] = [];
+  private responseInterceptors: ResponseInterceptor[] = [];
 
-  constructor(baseURL: string) {
+  private constructor(baseURL: string) {
     this.baseURL = baseURL;
     this.defaultHeaders = {
       'Content-Type': 'application/json',
     };
+  }
+
+  // Get singleton instance
+  public static getInstance(baseURL?: string): ApiClient {
+    if (!ApiClient.instance) {
+      ApiClient.instance = new ApiClient(baseURL || config.apiBaseUrl);
+    }
+    return ApiClient.instance;
+  }
+
+  // Add request interceptor
+  public addRequestInterceptor(interceptor: RequestInterceptor): void {
+    this.requestInterceptors.push(interceptor);
+  }
+
+  // Add response interceptor
+  public addResponseInterceptor(interceptor: ResponseInterceptor): void {
+    this.responseInterceptors.push(interceptor);
   }
 
   // Get auth token from localStorage
@@ -49,6 +76,24 @@ class ApiClient {
     return headers as HeadersInit;
   }
 
+  // Apply request interceptors
+  private async applyRequestInterceptors(requestConfig: RequestInit): Promise<RequestInit> {
+    let config = requestConfig;
+    for (const interceptor of this.requestInterceptors) {
+      config = await interceptor(config);
+    }
+    return config;
+  }
+
+  // Apply response interceptors
+  private async applyResponseInterceptors<T>(response: Response, data: ApiResponse<T>): Promise<ApiResponse<T>> {
+    let result = data;
+    for (const interceptor of this.responseInterceptors) {
+      result = await interceptor<T>(response, result);
+    }
+    return result;
+  }
+
   // Handle response
   private async handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
     const data = await response.json();
@@ -56,69 +101,84 @@ class ApiClient {
     if (!response.ok) {
       throw new Error(data.message || `HTTP error! status: ${response.status}`);
     }
+
+    // Apply response interceptors
+    return this.applyResponseInterceptors<T>(response, data);
+  }
+
+  // Base request method
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit,
+    requireAuth: boolean = false
+  ): Promise<ApiResponse<T>> {
+    const headers = this.buildHeaders(requireAuth);
     
-    return data;
+    const requestConfig: RequestInit = {
+      ...options,
+      headers: {
+        ...headers,
+        ...(options.headers || {}),
+      },
+    };
+
+    // Apply request interceptors
+    const finalConfig = await this.applyRequestInterceptors(requestConfig);
+
+    const response = await fetch(`${this.baseURL}${endpoint}`, finalConfig);
+    
+    return this.handleResponse<T>(response);
   }
 
   // GET request
   async get<T>(endpoint: string, requireAuth: boolean = false): Promise<ApiResponse<T>> {
-    const response = await fetch(`${this.baseURL}${endpoint}`, {
+    return this.request<T>(endpoint, {
       method: 'GET',
-      headers: this.buildHeaders(requireAuth),
-    });
-    
-    return this.handleResponse<T>(response);
+    }, requireAuth);
   }
 
   // POST request
   async post<T>(endpoint: string, data?: any, requireAuth: boolean = false): Promise<ApiResponse<T>> {
-    const response = await fetch(`${this.baseURL}${endpoint}`, {
+    return this.request<T>(endpoint, {
       method: 'POST',
-      headers: this.buildHeaders(requireAuth),
       body: data ? JSON.stringify(data) : undefined,
-    });
-    
-    return this.handleResponse<T>(response);
+    }, requireAuth);
   }
 
   // PUT request
   async put<T>(endpoint: string, data?: any, requireAuth: boolean = false): Promise<ApiResponse<T>> {
-    const response = await fetch(`${this.baseURL}${endpoint}`, {
+    return this.request<T>(endpoint, {
       method: 'PUT',
-      headers: this.buildHeaders(requireAuth),
       body: data ? JSON.stringify(data) : undefined,
-    });
-    
-    return this.handleResponse<T>(response);
+    }, requireAuth);
   }
 
   // PATCH request
   async patch<T>(endpoint: string, data?: any, requireAuth: boolean = false): Promise<ApiResponse<T>> {
-    const response = await fetch(`${this.baseURL}${endpoint}`, {
+    return this.request<T>(endpoint, {
       method: 'PATCH',
-      headers: this.buildHeaders(requireAuth),
       body: data ? JSON.stringify(data) : undefined,
-    });
-    
-    return this.handleResponse<T>(response);
+    }, requireAuth);
   }
 
   // DELETE request
   async delete<T>(endpoint: string, data?: any, requireAuth: boolean = false): Promise<ApiResponse<T>> {
-    const response = await fetch(`${this.baseURL}${endpoint}`, {
+    return this.request<T>(endpoint, {
       method: 'DELETE',
-      headers: this.buildHeaders(requireAuth),
       body: data ? JSON.stringify(data) : undefined,
-    });
-    
-    return this.handleResponse<T>(response);
+    }, requireAuth);
   }
 
   // Download file (for exports)
   async downloadFile(endpoint: string, filename: string, requireAuth: boolean = false): Promise<void> {
-    const response = await fetch(`${this.baseURL}${endpoint}`, {
-      headers: this.buildHeaders(requireAuth),
-    });
+    const headers = this.buildHeaders(requireAuth);
+    const requestConfig: RequestInit = {
+      headers,
+    };
+
+    const finalConfig = await this.applyRequestInterceptors(requestConfig);
+
+    const response = await fetch(`${this.baseURL}${endpoint}`, finalConfig);
 
     if (!response.ok) {
       throw new Error('Failed to download file');
@@ -134,8 +194,20 @@ class ApiClient {
     document.body.removeChild(link);
     window.URL.revokeObjectURL(downloadUrl);
   }
+
+  // Update base URL (useful for testing or dynamic config)
+  public setBaseURL(baseURL: string): void {
+    this.baseURL = baseURL;
+  }
+
+  // Get current base URL
+  public getBaseURL(): string {
+    return this.baseURL;
+  }
 }
 
-// Create and export API client instance
-export const apiClient = new ApiClient(config.apiBaseUrl);
+// Create and export singleton API client instance
+export const apiClient = ApiClient.getInstance();
 
+// Export class for testing purposes (allows creating test instances)
+export { ApiClient };
