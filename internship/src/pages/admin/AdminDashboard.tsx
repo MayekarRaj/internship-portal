@@ -3,28 +3,9 @@ import { useSelector } from 'react-redux';
 import { Briefcase, FileText, Clock, TrendingUp, Loader2, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import type { RootState } from '@/App';
-
-const API_BASE_URL = 'http://localhost:3011/api';
-
-interface DashboardMetrics {
-  totalActiveInternships: number;
-  totalApplications: number;
-  pendingApplications: number;
-  thisWeekApplications: number;
-  thisMonthApplications: number;
-  statusBreakdown: Array<{ application_status: string; count: number }>;
-}
-
-interface RecentApplication {
-  id: number;
-  first_name: string;
-  last_name: string;
-  email: string;
-  internship_title: string;
-  application_status: string;
-  created_at: string;
-}
+import type { RootState } from '@/store';
+import { dashboardService } from '@/services';
+import type { DashboardMetrics, RecentApplication } from '@/types';
 
 const AdminDashboard: React.FC = () => {
   const { token } = useSelector((state: RootState) => state.adminAuth);
@@ -37,20 +18,9 @@ const AdminDashboard: React.FC = () => {
     const fetchDashboardData = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch(`${API_BASE_URL}/admin/dashboard`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.message || 'Failed to fetch dashboard data');
-        }
-
-        setMetrics(data.data.metrics);
-        setRecentApplications(data.data.recentApplications);
+        const data = await dashboardService.getMetrics();
+        setMetrics(data.metrics);
+        setRecentApplications(data.recentApplications);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');
       } finally {

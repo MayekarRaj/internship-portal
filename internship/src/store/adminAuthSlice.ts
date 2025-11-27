@@ -1,11 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-
-interface Admin {
-  id: number;
-  email: string;
-  name: string;
-  role: 'super_admin' | 'admin';
-}
+import { authService } from '../services/authService';
+import type { Admin } from '../types';
 
 interface AdminAuthState {
   admin: Admin | null;
@@ -23,29 +18,19 @@ const initialState: AdminAuthState = {
   error: null,
 };
 
-const API_BASE_URL = 'http://localhost:3011/api';
-
 // Async thunks
 export const loginAdmin = createAsyncThunk(
   'adminAuth/login',
   async (credentials: { email: string; password: string }, { rejectWithValue }) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/admin/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(credentials),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        return rejectWithValue(data.message || 'Login failed');
+      const response = await authService.login(credentials);
+      
+      // Store token
+      if (response.token) {
+        localStorage.setItem('adminToken', response.token);
       }
 
-      localStorage.setItem('adminToken', data.data.token);
-      return data.data;
+      return response;
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : 'Login failed');
     }
@@ -61,20 +46,8 @@ export const verifyAdmin = createAsyncThunk(
         return rejectWithValue('No token found');
       }
 
-      const response = await fetch(`${API_BASE_URL}/admin/auth/me`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        localStorage.removeItem('adminToken');
-        return rejectWithValue(data.message || 'Verification failed');
-      }
-
-      return data.data;
+      const admin = await authService.getCurrentAdmin();
+      return { admin };
     } catch (error) {
       localStorage.removeItem('adminToken');
       return rejectWithValue(error instanceof Error ? error.message : 'Verification failed');
@@ -86,15 +59,7 @@ export const logoutAdmin = createAsyncThunk(
   'adminAuth/logout',
   async (_, { rejectWithValue }) => {
     try {
-      const token = localStorage.getItem('adminToken');
-      if (token) {
-        await fetch(`${API_BASE_URL}/admin/auth/logout`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-      }
+      await authService.logout();
       localStorage.removeItem('adminToken');
       return true;
     } catch (error) {

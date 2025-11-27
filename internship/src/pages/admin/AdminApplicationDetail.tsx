@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
 import { ArrowLeft, Save, Loader2, AlertCircle, Mail, Phone, GraduationCap, Calendar, ExternalLink, MessageSquare, Plus, Edit, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -7,44 +6,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import type { RootState } from '@/App';
-
-const API_BASE_URL = 'http://localhost:3011/api';
-
-interface Application {
-  id: number;
-  internship_id: number;
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone: string;
-  university: string;
-  graduation_year: number;
-  major: string;
-  gpa?: number;
-  motivation: string;
-  project_submission_url: string;
-  application_status: string;
-  created_at: string;
-  updated_at: string;
-  internship_title: string;
-  department: string;
-  internship_description: string;
-}
-
-interface Note {
-  id: number;
-  application_id: number;
-  admin_id: number;
-  note: string;
-  created_at: string;
-  updated_at: string;
-  admin_name: string;
-  admin_email: string;
-}
+import { adminApplicationService, notesService } from '@/services';
+import type { Application, Note } from '@/types';
 
 const AdminApplicationDetail: React.FC = () => {
-  const { token } = useSelector((state: RootState) => state.adminAuth);
+  // Token is handled by API client automatically
   const [application, setApplication] = useState<Application | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -72,20 +38,9 @@ const AdminApplicationDetail: React.FC = () => {
   const fetchApplication = async (id: number) => {
     try {
       setIsLoading(true);
-      const response = await fetch(`${API_BASE_URL}/admin/applications/${id}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to fetch application');
-      }
-
-      setApplication(data.data);
-      setStatus(data.data.application_status);
+      const app = await adminApplicationService.getById(id);
+      setApplication(app);
+      setStatus(app.application_status);
       
       // Fetch notes
       fetchNotes(id);
@@ -98,16 +53,8 @@ const AdminApplicationDetail: React.FC = () => {
 
   const fetchNotes = async (applicationId: number) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/admin/applications/${applicationId}/notes`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      const data = await response.json();
-      if (response.ok) {
-        setNotes(data.data);
-      }
+      const notesData = await notesService.getByApplication(applicationId);
+      setNotes(notesData);
     } catch (err) {
       console.error('Error fetching notes:', err);
     }
@@ -118,20 +65,7 @@ const AdminApplicationDetail: React.FC = () => {
 
     try {
       setIsAddingNote(true);
-      const response = await fetch(`${API_BASE_URL}/admin/applications/${application.id}/notes`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ note: newNote }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to add note');
-      }
-
+      await notesService.create(application.id, newNote);
       setNewNote('');
       await fetchNotes(application.id);
     } catch (err) {
@@ -145,20 +79,7 @@ const AdminApplicationDetail: React.FC = () => {
     if (!editNoteText.trim()) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/admin/notes/${noteId}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ note: editNoteText }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to update note');
-      }
-
+      await notesService.update(noteId, editNoteText);
       setEditingNoteId(null);
       setEditNoteText('');
       if (application) {
@@ -173,18 +94,7 @@ const AdminApplicationDetail: React.FC = () => {
     if (!confirm('Are you sure you want to delete this note?')) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/admin/notes/${noteId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to delete note');
-      }
-
+      await notesService.delete(noteId);
       if (application) {
         await fetchNotes(application.id);
       }
@@ -203,24 +113,10 @@ const AdminApplicationDetail: React.FC = () => {
       setError(null);
       setSuccess(false);
 
-      const response = await fetch(`${API_BASE_URL}/admin/applications/${application.id}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ status }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to update application status');
-      }
-
+      await adminApplicationService.updateStatus(application.id, status);
       setSuccess(true);
       if (application) {
-        setApplication({ ...application, application_status: status });
+        setApplication({ ...application, application_status: status as any });
       }
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {

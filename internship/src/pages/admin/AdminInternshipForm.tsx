@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
 import { ArrowLeft, Save, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,9 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import type { RootState } from '@/App';
-
-const API_BASE_URL = 'http://localhost:3011/api';
+import { adminInternshipService } from '@/services';
 
 interface InternshipFormData {
   title: string;
@@ -29,7 +26,7 @@ interface InternshipFormData {
 }
 
 const AdminInternshipForm: React.FC = () => {
-  const { token } = useSelector((state: RootState) => state.adminAuth);
+  // Token is handled by API client automatically
   const [isEditMode, setIsEditMode] = useState(false);
   const [internshipId, setInternshipId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -67,19 +64,7 @@ const AdminInternshipForm: React.FC = () => {
   const fetchInternship = async (id: number) => {
     try {
       setIsFetching(true);
-      const response = await fetch(`${API_BASE_URL}/admin/internships/${id}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to fetch internship');
-      }
-
-      const internship = data.data;
+      const internship = await adminInternshipService.getById(id);
       setFormData({
         title: internship.title || '',
         department: internship.department || '',
@@ -172,25 +157,16 @@ const AdminInternshipForm: React.FC = () => {
       setError(null);
       setSuccess(false);
 
-      const url = isEditMode
-        ? `${API_BASE_URL}/admin/internships/${internshipId}`
-        : `${API_BASE_URL}/admin/internships`;
+      // Convert form data to match Internship type
+      const internshipData = {
+        ...formData,
+        type: (formData.type || 'remote') as 'remote' | 'onsite' | 'hybrid',
+      };
 
-      const method = isEditMode ? 'PUT' : 'POST';
-
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to save internship');
+      if (isEditMode && internshipId) {
+        await adminInternshipService.update(internshipId, internshipData);
+      } else {
+        await adminInternshipService.create(internshipData);
       }
 
       setSuccess(true);

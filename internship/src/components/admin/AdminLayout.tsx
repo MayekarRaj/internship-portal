@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Building2, LayoutDashboard, Briefcase, FileText, LogOut, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { logoutAdmin } from '@/store/adminAuthSlice';
-import type { RootState } from '@/App';
+import type { RootState } from '@/store';
 
 interface AdminLayoutProps {
   children: React.ReactNode;

@@ -8,7 +8,7 @@ import AdminInternshipForm from '../../pages/admin/AdminInternshipForm';
 import AdminApplicationsList from '../../pages/admin/AdminApplicationsList';
 import AdminApplicationDetail from '../../pages/admin/AdminApplicationDetail';
 import { verifyAdmin } from '../../store/adminAuthSlice';
-import type { RootState } from '../../App';
+import type { RootState } from '@/store';
 
 const AdminRouter: React.FC = () => {
   const dispatch = useDispatch();

@@ -7,28 +7,10 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import type { RootState } from '@/App';
+import type { RootState } from '@/store';
+import { adminApplicationService, adminInternshipService } from '@/services';
+import type { Application } from '@/types';
 
-const API_BASE_URL = 'http://localhost:3011/api';
-
-interface Application {
-  id: number;
-  internship_id: number;
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone: string;
-  university: string;
-  graduation_year: number;
-  major: string;
-  gpa?: number;
-  motivation: string;
-  project_submission_url: string;
-  application_status: string;
-  created_at: string;
-  internship_title: string;
-  department: string;
-}
 
 const AdminApplicationsList: React.FC = () => {
   const { token } = useSelector((state: RootState) => state.adminAuth);
@@ -66,16 +48,8 @@ const AdminApplicationsList: React.FC = () => {
 
   const fetchInternships = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/admin/internships`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      const data = await response.json();
-      if (response.ok && data.data) {
-        setInternships(data.data.map((i: any) => ({ id: i.id, title: i.title })));
-      }
+      const internships = await adminInternshipService.getAll();
+      setInternships(internships.map(i => ({ id: i.id, title: i.title })));
     } catch (err) {
       console.error('Failed to fetch internships:', err);
     }
@@ -84,34 +58,24 @@ const AdminApplicationsList: React.FC = () => {
   const fetchApplications = async () => {
     try {
       setIsLoading(true);
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: '10',
+      const data = await adminApplicationService.getAll({
+        page,
+        limit: 10,
+        status: filters.status || undefined,
+        internship_id: filters.internship_id ? parseInt(filters.internship_id) : undefined,
+        date_from: filters.date_from || undefined,
+        date_to: filters.date_to || undefined,
+        search: filters.search || undefined,
       });
 
-      if (filters.search) params.append('search', filters.search);
-      if (filters.status) params.append('status', filters.status);
-      if (filters.internship_id) params.append('internship_id', filters.internship_id);
-      if (filters.date_from) params.append('date_from', filters.date_from);
-      if (filters.date_to) params.append('date_to', filters.date_to);
-
-      const response = await fetch(`${API_BASE_URL}/admin/applications?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to fetch applications');
-      }
-
-      setApplications(data.data.applications);
-      setTotal(data.data.pagination.total);
-      setTotalPages(data.data.pagination.totalPages);
+      setApplications(data.data || []);
+      setTotal(data.pagination?.total || 0);
+      setTotalPages(data.pagination?.totalPages || 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
+      setApplications([]); // Set empty array on error
+      setTotal(0);
+      setTotalPages(1);
     } finally {
       setIsLoading(false);
     }
@@ -124,19 +88,7 @@ const AdminApplicationsList: React.FC = () => {
 
     try {
       setDeletingId(id);
-      const response = await fetch(`${API_BASE_URL}/admin/applications/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to delete application');
-      }
-
+      await adminApplicationService.delete(id);
       // Refresh list
       fetchApplications();
     } catch (err) {
@@ -165,38 +117,13 @@ const AdminApplicationsList: React.FC = () => {
   const handleExport = async () => {
     try {
       setIsExporting(true);
-      
-      // Build query string from current filters
-      const params = new URLSearchParams();
-      if (filters.status) params.append('status', filters.status);
-      if (filters.internship_id) params.append('internship_id', filters.internship_id);
-      if (filters.date_from) params.append('date_from', filters.date_from);
-      if (filters.date_to) params.append('date_to', filters.date_to);
-      if (filters.search) params.append('search', filters.search);
-      
-      const queryString = params.toString();
-      const url = `${API_BASE_URL}/admin/applications/export${queryString ? `?${queryString}` : ''}`;
-      
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+      await adminApplicationService.export({
+        status: filters.status || undefined,
+        internship_id: filters.internship_id ? parseInt(filters.internship_id) : undefined,
+        date_from: filters.date_from || undefined,
+        date_to: filters.date_to || undefined,
+        search: filters.search || undefined,
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to export applications');
-      }
-
-      // Get the blob and create download link
-      const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = `applications-${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(downloadUrl);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to export applications');
     } finally {
@@ -205,7 +132,7 @@ const AdminApplicationsList: React.FC = () => {
   };
 
   const handleSelectAll = (checked: boolean) => {
-    if (checked) {
+    if (checked && applications) {
       setSelectedIds(new Set(applications.map(app => app.id)));
     } else {
       setSelectedIds(new Set());
@@ -227,24 +154,12 @@ const AdminApplicationsList: React.FC = () => {
 
     try {
       setIsBulkUpdating(true);
-      const response = await fetch(`${API_BASE_URL}/admin/applications/bulk/status`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          application_ids: Array.from(selectedIds),
-          status: bulkStatus,
-        }),
-      });
+      const result = await adminApplicationService.bulkUpdateStatus(
+        Array.from(selectedIds),
+        bulkStatus
+      );
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to update status');
-      }
-
-      alert(`Successfully updated ${data.data.updated_count} application(s) to ${bulkStatus}`);
+      alert(`Successfully updated ${result.updated_count} application(s) to ${bulkStatus}`);
       setSelectedIds(new Set());
       setShowBulkStatusModal(false);
       setBulkStatus('');
@@ -265,23 +180,9 @@ const AdminApplicationsList: React.FC = () => {
 
     try {
       setIsBulkDeleting(true);
-      const response = await fetch(`${API_BASE_URL}/admin/applications/bulk`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          application_ids: Array.from(selectedIds),
-        }),
-      });
+      const result = await adminApplicationService.bulkDelete(Array.from(selectedIds));
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to delete applications');
-      }
-
-      alert(`Successfully deleted ${data.data.deleted_count} application(s)`);
+      alert(`Successfully deleted ${result.deleted_count} application(s)`);
       setSelectedIds(new Set());
       fetchApplications();
     } catch (err) {
@@ -439,7 +340,7 @@ const AdminApplicationsList: React.FC = () => {
         <div className="flex justify-center items-center h-64">
           <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
         </div>
-      ) : applications.length === 0 ? (
+      ) : !applications || applications.length === 0 ? (
         <Card>
           <CardContent className="text-center py-12">
             <p className="text-gray-600">No applications found</p>
@@ -500,14 +401,14 @@ const AdminApplicationsList: React.FC = () => {
 
           <div className="flex items-center justify-between mb-4">
             <div className="text-sm text-gray-600">
-              Showing {applications.length} of {total} applications
+              Showing {applications?.length || 0} of {total} applications
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => handleSelectAll(selectedIds.size !== applications.length)}
+                onClick={() => handleSelectAll(selectedIds.size !== (applications?.length || 0))}
                 className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
               >
-                {selectedIds.size === applications.length ? (
+                {selectedIds.size === (applications?.length || 0) ? (
                   <CheckSquare className="w-4 h-4" />
                 ) : (
                   <Square className="w-4 h-4" />
@@ -518,7 +419,7 @@ const AdminApplicationsList: React.FC = () => {
           </div>
 
           <div className="space-y-4">
-            {applications.map((application) => (
+            {applications && applications.map((application) => (
               <Card key={application.id}>
                 <CardContent className="p-6">
                   <div className="flex justify-between items-start">

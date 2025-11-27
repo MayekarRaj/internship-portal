@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { loginAdmin, verifyAdmin, clearError } from '@/store/adminAuthSlice';
-import type { RootState } from '@/App';
+import type { RootState } from '@/store';
 
 const AdminLogin: React.FC = () => {
   const dispatch = useDispatch();

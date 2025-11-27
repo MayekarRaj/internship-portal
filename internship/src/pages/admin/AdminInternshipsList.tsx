@@ -4,28 +4,9 @@ import { Plus, Edit, Trash2, Eye, EyeOff, Loader2, AlertCircle, Calendar, MapPin
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import type { RootState } from '@/App';
-
-const API_BASE_URL = 'http://localhost:3011/api';
-
-interface Internship {
-  id: number;
-  title: string;
-  department: string;
-  description: string;
-  requirements: string;
-  duration: string;
-  stipend: string;
-  location: string;
-  type: 'remote' | 'onsite' | 'hybrid';
-  application_deadline: string;
-  start_date: string;
-  skills_required: string;
-  task_sheet_url?: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
+import type { RootState } from '@/store';
+import { adminInternshipService } from '@/services';
+import type { Internship } from '@/types';
 
 const AdminInternshipsList: React.FC = () => {
   const { token } = useSelector((state: RootState) => state.adminAuth);
@@ -42,19 +23,8 @@ const AdminInternshipsList: React.FC = () => {
   const fetchInternships = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch(`${API_BASE_URL}/admin/internships`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to fetch internships');
-      }
-
-      setInternships(data.data);
+      const data = await adminInternshipService.getAll();
+      setInternships(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -69,19 +39,7 @@ const AdminInternshipsList: React.FC = () => {
 
     try {
       setDeletingId(id);
-      const response = await fetch(`${API_BASE_URL}/admin/internships/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to delete internship');
-      }
-
+      await adminInternshipService.delete(id);
       // Remove from list
       setInternships(internships.filter((internship) => internship.id !== id));
     } catch (err) {
@@ -94,21 +52,7 @@ const AdminInternshipsList: React.FC = () => {
   const handleToggleStatus = async (id: number, currentStatus: boolean) => {
     try {
       setTogglingId(id);
-      const response = await fetch(`${API_BASE_URL}/admin/internships/${id}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ is_active: !currentStatus }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to update internship status');
-      }
-
+      await adminInternshipService.toggleStatus(id, !currentStatus);
       // Update in list
       setInternships(
         internships.map((internship) =>
