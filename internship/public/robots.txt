@@ -1,0 +1,9 @@
+# robots.txt for Getfly Technologies Internship Portal
+
+User-agent: *
+Allow: /
+Disallow: /admin/
+
+# Sitemap
+Sitemap: https://internships.getflytechnologies.com/sitemap.xml
+
