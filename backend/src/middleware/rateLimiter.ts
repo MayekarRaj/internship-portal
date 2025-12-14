@@ -12,7 +12,7 @@ export const apiLimiter = rateLimit({
 // Specific rate limiting for application submission
 export const applicationLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 3, // limit each IP to 3 applications per hour
+  max: 10, // limit each IP to 3 applications per hour
   message: 'Too many application submissions, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,

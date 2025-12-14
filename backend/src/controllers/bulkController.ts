@@ -67,7 +67,7 @@ export const bulkUpdateStatus = async (req: Request, res: Response) => {
       const statusMessages: Record<string, string> = {
         pending: 'Your application is pending review.',
         reviewed: 'Your application has been reviewed and is under consideration.',
-        shortlisted: 'Congratulations! You have been shortlisted for the next round.',
+        shortlisted: 'Congratulations! You have been shortlisted for the next round. You will be contacted for further procedures or the next round of the selection process.',
         accepted: 'Congratulations! Your application has been accepted. We will contact you soon with next steps.',
         rejected: 'Thank you for your interest. Unfortunately, we are unable to proceed with your application at this time.',
       };
